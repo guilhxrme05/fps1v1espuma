@@ -22,8 +22,8 @@ Todos são simétricos (girados 180°), com chão branco e uma parede na frente 
 | Pátio | amarelo | Praça elevada no centro, com rampa saindo de cada base |
 | Torres | verde | Uma torre ao lado de cada base, com rampa vindo do meio |
 | Ponte | roxo | Ponte elevada no meio; dá para passar por baixo |
-| Fortes | laranja | Cada base fica num forte elevado, com duas rampas descendo |
-| Rotação | — | Sorteia um mapa diferente a cada rodada |
+| Fortes | laranja | Cada base fica num forte elevado, com duas rampas descendo e um muro alto no meio |
+| Rotação | — | Fila com os 5 mapas em ordem aleatória; quando a fila acaba, embaralha de novo |
 
 Vale o mapa escolhido por quem criou a sala.
 
@@ -39,10 +39,10 @@ Vale o mapa escolhido por quem criou a sala.
 |---|---|---|---|
 | AK-47 (1) | 27 | 144 | 5,4 m/s |
 | Desert Eagle (2) | 40 | 212 | 5,73 m/s |
-| Faca (3) | 40 / 65 | — | 6,75 m/s |
+| Karambit (3) | 40 / 65 | — | 6,75 m/s |
 | AWP (4) | 115 | 460 | 5,13 m/s |
 
-O movimento tem inércia como no Valorant: trocar de A para D perde velocidade, e soltar as teclas para o boneco quase na hora (não precisa de contra-strafe). Andar com Shift fica em 55% da velocidade e não faz barulho de passo. Agachado fica em 40%. Atirar correndo ou no ar é impreciso; parado ou agachado é preciso, como no CS. A AK tem padrão de spray.
+O movimento tem inércia como no Valorant: trocar de A para D perde velocidade, e soltar as teclas para o boneco quase na hora (não precisa de contra-strafe). Andar com Shift fica em 55% da velocidade e não faz barulho de passo. Agachado fica em 40% e cabe inteiro atrás de uma caixa. Atirar correndo ou no ar é impreciso; parado ou agachado é preciso, como no CS. A AK tem padrão de spray.
 
 ## Controles
 
@@ -54,9 +54,10 @@ O movimento tem inércia como no Valorant: trocar de A para D perde velocidade, 
 | Espaço | Pular |
 | Mouse 1 | Atirar |
 | Mouse 2 | Luneta da AWP / golpe forte da faca |
-| 1 2 3 4 | AK, Deagle, Faca, AWP |
+| 1 2 3 4 | AK, Deagle, Karambit, AWP |
 | Q / rodinha | Última arma / trocar arma |
 | R | Recarregar |
+| F | Inspecionar (o karambit gira no dedo) |
 | Tab | Placar |
 | Esc | Menu e configurações |
 

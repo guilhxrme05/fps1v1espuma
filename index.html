@@ -281,6 +281,7 @@ button:disabled{opacity:.5;cursor:default}
       <dt>1 2 3 4</dt><dd>AK · Deagle · Faca · AWP</dd>
       <dt>Q / rodinha</dt><dd>Última arma / trocar arma</dd>
       <dt>R</dt><dd>Recarregar</dd>
+      <dt>F</dt><dd>Inspecionar a arma (o karambit gira no dedo)</dd>
       <dt>Tab</dt><dd>Placar</dd>
       <dt>Esc</dt><dd>Menu e configurações</dd>
     </dl>
@@ -326,7 +327,7 @@ const W = {
             base: .0015, move: .09, air: .25, shotSpread: .0035, recover: 5, pattern: true, draw: 550, snd: 'rifle' },
   pistol: { name: 'Desert Eagle', dmg: 53, mult: { head: 4, body: .75, leg: .75 }, rof: 225, mag: 7, res: 35, reload: 2200, speed: 5.73, auto: false,
             base: .0035, move: .07, air: .22, shotSpread: .028, recover: 4, kickP: .035, kickY: .012, draw: 450, snd: 'pistol' },
-  knife:  { name: 'Faca', melee: true, dmg: 40, heavy: 65, rof: 450, heavyRof: 1000, range: 1.9, speed: 6.75, draw: 350, snd: 'knife' },
+  knife:  { name: 'Karambit', melee: true, dmg: 40, heavy: 65, rof: 450, heavyRof: 1000, range: 1.9, speed: 6.75, draw: 600, snd: 'knife' },
   sniper: { name: 'AWP', dmg: 115, mult: { head: 4, body: 1, leg: .75 }, rof: 1460, mag: 5, res: 30, reload: 3600, speed: 5.13, auto: false,
             base: .0004, noscope: .07, move: .14, air: .3, shotSpread: 0, recover: 6, kickP: .05, kickY: .01, scope: true, draw: 1000, snd: 'sniper' },
 };
@@ -336,7 +337,7 @@ const ORDER = ['rifle', 'pistol', 'knife', 'sniper'];
 const PAT = [[0,0],[.016,.001],[.02,.002],[.024,-.002],[.026,.003],[.026,.004],[.024,.002],[.02,-.004],[.016,-.012],[.012,-.016],[.008,-.014],[.006,-.01],[.004,.008],[.004,.014],[.003,.016],[.003,.012],[.002,.006],[.002,-.008],[.002,-.014],[.002,-.016],[.002,-.012],[.001,-.004],[.001,.008],[.001,.012],[.001,.01],[.001,.004],[.001,-.006],[.001,-.01],[.001,-.008],[.001,0]];
 
 /* ================= Física (estilo Valorant) ================= */
-const GRAV = 19, JUMP_V = 6.2, RADIUS = 0.3, H_STAND = 1.8, H_CROUCH = 1.3, EYE_STAND = 1.64, EYE_CROUCH = 1.14;
+const GRAV = 19, JUMP_V = 6.2, RADIUS = 0.3, H_STAND = 1.8, H_CROUCH = 1.15, EYE_STAND = 1.64, EYE_CROUCH = 1.0, TUCK = H_STAND - H_CROUCH;
 const FRICTION = 6, ACCEL = 10, STOP_SPEED = 2.0, STOP_DECEL = 70; // soltar as teclas para em ~0,08 s
 const WALK_MUL = 0.55, CROUCH_MUL = 0.4, SCOPE_MUL = 0.55, STEP_SPEED = 3.2;
 
@@ -399,7 +400,7 @@ const MAPS = {
       B.shield(-21 * MS, 8 * MS);
       const HALF = [[-11,-18,2*C,C,C],[11.5,-17,C,C,2*C],[-4,-15,C,C,C],[4,-14,2*C,C,C],[-13,-10,C,2*C,C],[8.5,-9.5,C,C,2*C],
         [-6,-7.5,2*C,C,C],[1,-7,C,C,C],[13,-4,C,2*C,C],[-9.5,-2.5,C,C,2*C],[4,-2,C,C,2*C],
-        [-9,-19.5,C,C,C],[9.5,-19,C,2*C,C],[0,-17.5,2*C,C,C],[-6,-12,C,C,2*C],[6.5,-11,C,C,C],[-1.5,-11,C,C,C],[-3,-4.5,C,C,C],[7,-5.5,C,C,C]];
+        [9.5,-19,C,2*C,C],[0,-17.5,2*C,C,C],[-6,-12,C,C,2*C],[6.5,-11,C,C,C],[-1.5,-11,C,C,C],[-3,-4.5,C,C,C],[7,-5.5,C,C,C]];
       for (const [x, z, w, d, h] of HALF) B.pair(x * MS, z * MS, w, d, h, h > C ? K.crate2 : K.crate);
       for (const [x, z] of [[-11.6,-18],[4.6,-14],[13,-4.6]]) B.pair(x * MS, z * MS, C, C, C, K.crate2, C);
       B.box(0, 0, 2 * C, 2 * C, C, K.crate);
@@ -463,7 +464,7 @@ const MAPS = {
       B.pair(-11.5, -13.6, C, C, C, K.crate, 1.2);              // ameias na beira do forte
       B.pair(-2.5, -13.6, 2 * C, C, C, K.crate, 1.2);
       B.pair(3.5, -13.6, C, C, C, K.crate, 1.2);
-      B.box(0, 0, C, C, 3 * C, K.crate2);                       // pilar central
+      B.box(0, 0, 2 * C, C, 3 * C, K.crate2);                   // muro alto no meio: 2 caixas de largura, 3 de altura
       B.pair(-4, -3, 2 * C, C, C, K.crate);
       B.pair(6, -5, C, C, 2 * C, K.crate2);
       B.pair(-10, -6, C, 2 * C, C, K.crate);
@@ -538,10 +539,16 @@ function buildMap(id) {
   worldMesh = new THREE.Mesh(geoFrom(out), worldMat); scene.add(worldMesh);
   try { clearDecals(); BOT.wp = null; BOT.knowsUntil = 0; } catch (e) { /* primeira montagem, antes de existirem */ }
 }
+// Rotação: fila com todos os mapas em ordem aleatória; quando a fila acaba, embaralha de novo
+let mapQueue = [];
 function pickMap(prev) {
   if (S.map !== 'rotacao' && MAPS[S.map]) return S.map;
-  const ids = MAP_IDS.filter(i => i !== prev);
-  return ids[Math.floor(Math.random() * ids.length)];
+  if (!mapQueue.length) {
+    mapQueue = MAP_IDS.slice();
+    for (let i = mapQueue.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [mapQueue[i], mapQueue[j]] = [mapQueue[j], mapQueue[i]]; }
+    if (mapQueue[0] === prev) mapQueue.push(mapQueue.shift()); // não repete o mapa na virada da fila
+  }
+  return mapQueue.shift();
 }
 // nascimento aleatório em qualquer ponto atrás da parede da base, olhando para uma das saídas
 function randSpawn(side) {
@@ -751,7 +758,7 @@ const GUNS = {
           [[-.022,-.065,.06],[.022,.02,.28],0x8b5a2b]],
   pistol:[[[-.02,0,-.25],[.02,.045,.02],0x9da1a8],[[-.018,-.02,-.22],[.018,0,0],0x7d8187],[[-.017,-.13,-.03],[.017,-.02,.035],0x2a2a2c],
           [[-.005,.045,-.24],[.005,.055,-.22],0x2a2a2c]],
-  knife: [[[-.015,-.022,0],[.015,.022,.12],0x1f1f21],[[-.004,-.028,-.24],[.004,.02,0],0xc9cdd3],[[-.022,-.03,-.01],[.022,.03,.005],0x555555]],
+  knife: [],
   sniper:[[[-.028,-.035,-.32],[.028,.03,.22],0x4a6b45],[[-.011,0,-.88],[.011,.022,-.32],0x222326],[[-.022,.045,-.30],[.022,.09,-.02],0x1c1d20],
           [[-.026,.04,-.33],[.026,.095,-.30],0x1c1d20],[[-.016,-.13,-.14],[.016,-.035,-.07],0x2e3033],[[-.016,-.12,0],[.016,-.03,.05],0x2e3033],
           [[-.022,-.075,.22],[.022,.03,.36],0x4a6b45]],
@@ -760,7 +767,7 @@ const GUNS = {
 const ARMS = {
   rifle:  [{ hand: [0, -.045, -.42], from: [0, -.06, -.40], to: [-.24, -.34, -.02] }, { hand: [0, -.09, 0], from: [.01, -.10, .03], to: [.17, -.32, .32] }],
   pistol: [{ hand: [-.025, -.09, -.01], from: [-.03, -.10, .01], to: [-.22, -.33, .26] }, { hand: [.012, -.085, .005], from: [.02, -.10, .03], to: [.16, -.33, .32] }],
-  knife:  [{ hand: [0, 0, .055], from: [.01, -.01, .09], to: [.15, -.26, .36] }],
+  knife:  [{ hand: null, from: [.02, -.03, .0], to: [.16, -.27, .30] }],
   sniper: [{ hand: [0, -.05, -.45], from: [0, -.065, -.43], to: [-.24, -.34, -.04] }, { hand: [0, -.09, .01], from: [.01, -.10, .04], to: [.17, -.32, .33] }],
 };
 vmScene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75));
@@ -783,9 +790,32 @@ const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: tru
 const flashGeo = new THREE.PlaneGeometry(.13, .13);
 const vmRoot = new THREE.Group(); vmRoot.scale.setScalar(0.5); vmScene.add(vmRoot);
 const vmGuns = {}, vmFlash = {};
+// karambit: lâmina curva em garra, cabo e anel para o dedo; gira em volta do anel
+const bladeMat = new THREE.MeshLambertMaterial({ color: 0xd4d9df }), darkMat = new THREE.MeshLambertMaterial({ color: 0x1d1e21 });
+const KH_ROT = [0.35, -0.85, 0.45];
+function buildKarambit() {
+  const k = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.024, .007, 6, 16), darkMat); ring.rotation.y = Math.PI / 2; k.add(ring);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(.018, .026, .10), darkMat); handle.position.set(0, 0, -.08); k.add(handle);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(.02, .04, .008), darkMat); guard.position.set(0, -.004, -.13); k.add(guard);
+  const R = .11, cz = -.13, N = 12, T = 1.35;
+  for (let i = 0; i < N; i++) {
+    const th = (i + .5) / N * T, w = .034 * (1 - i / N) + .004;
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(.005, w, R * T / N * 1.1), bladeMat);
+    seg.position.set(0, -R + R * Math.cos(th) - Math.cos(th) * w / 2, cz - R * Math.sin(th) + Math.sin(th) * w / 2);
+    seg.rotation.x = -th; k.add(seg);
+  }
+  return k;
+}
+let vmKnife = null;
 for (const k of ORDER) {
-  const g = new THREE.Group(); g.add(boxModel(GUNS[k]));
-  for (const a of ARMS[k]) { const h = new THREE.Mesh(gloveGeo, skinMat); h.position.set(...a.hand); g.add(h); limb(g, a.from, a.to, .072, sleeveMat); }
+  const g = new THREE.Group(); if (GUNS[k].length) g.add(boxModel(GUNS[k]));
+  if (k === 'knife') {
+    const holder = new THREE.Group(); holder.rotation.set(...KH_ROT);
+    const hand = new THREE.Mesh(gloveGeo, skinMat); hand.position.set(0, -.01, -.06); holder.add(hand);
+    const pivot = buildKarambit(); holder.add(pivot); g.add(holder); vmKnife = { holder, pivot };
+  }
+  for (const a of ARMS[k]) { if (a.hand) { const h = new THREE.Mesh(gloveGeo, skinMat); h.position.set(...a.hand); g.add(h); } limb(g, a.from, a.to, .072, sleeveMat); }
   if (MUZZLE[k]) { const f = new THREE.Mesh(flashGeo, flashMat); f.position.set(...MUZZLE[k]); f.visible = false; g.add(f); vmFlash[k] = f; }
   g.visible = false; vmRoot.add(g); vmGuns[k] = g;
 }
@@ -832,7 +862,7 @@ function tracer(a, b, ms) {
 const P = { pos: new V3(0, 0, -20), vel: new V3(), yaw: Math.PI, pitch: 0, h: H_STAND, onGround: true, crouch: false, eyeOff: EYE_STAND,
   hp: 100, alive: true, weapon: 'rifle', lastW: 'pistol', ammo: {}, nextFire: 0, lastShot: 0, reloadEnd: 0, drawEnd: 0,
   recoilP: 0, recoilY: 0, shots: 0, spread: 0, kick: 0, swing: 0, punch: 0, zoom: 0, flashT: 0, bob: 0, stepT: 0, jumpReady: 0, tagUntil: 0,
-  deathT: 0, killedBy: null, swayX: 0, swayY: 0, m1: false, m1Press: false, m2Press: false, airCap: 0 };
+  deathT: 0, killedBy: null, swayX: 0, swayY: 0, inspT: 0, kAnim: null, m1: false, m1Press: false, m2Press: false, airCap: 0 };
 P.onLand = () => AU.land(0.8, 0);
 function refillAmmo(e) { e.ammo = {}; for (const k of ORDER) if (!W[k].melee) e.ammo[k] = { mag: W[k].mag, res: W[k].res }; }
 refillAmmo(P);
@@ -1097,10 +1127,10 @@ function playerInput(dt, t) {
   const wantC = P.alive && locked && (K('KeyC') || (S.crouchCtrl && (K('ControlLeft') || K('ControlRight'))));
   if (wantC && !P.crouch) {
     P.crouch = true;
-    if (!P.onGround && !overlapAny(P.pos.x, P.pos.y + 0.5, P.pos.z, H_CROUCH)) { P.pos.y += 0.5; P.eyeOff = EYE_CROUCH; }
+    if (!P.onGround && !overlapAny(P.pos.x, P.pos.y + TUCK, P.pos.z, H_CROUCH)) { P.pos.y += TUCK; P.eyeOff = EYE_CROUCH; }
   } else if (!wantC && P.crouch) {
     if (P.onGround) { if (!overlapAny(P.pos.x, P.pos.y, P.pos.z, H_STAND)) P.crouch = false; }
-    else if (!overlapAny(P.pos.x, P.pos.y - 0.5, P.pos.z, H_STAND)) { P.pos.y -= 0.5; P.crouch = false; P.eyeOff = EYE_STAND; }
+    else if (!overlapAny(P.pos.x, P.pos.y - TUCK, P.pos.z, H_STAND)) { P.pos.y -= TUCK; P.crouch = false; P.eyeOff = EYE_STAND; }
     else if (!overlapAny(P.pos.x, P.pos.y, P.pos.z, H_STAND)) P.crouch = false;
   }
   P.h = P.crouch ? H_CROUCH : H_STAND;
@@ -1119,6 +1149,7 @@ function playerInput(dt, t) {
 function selectWeapon(k) {
   if (!W[k] || k === P.weapon || !P.alive) return;
   P.lastW = P.weapon; P.weapon = k; P.drawEnd = now() + W[k].draw; P.reloadEnd = 0; P.zoom = 0; P.shots = 0; applyFov();
+  P.inspT = 0; P.kAnim = k === 'knife' ? { type: 'draw', t0: now() } : null;
 }
 function startReload(t) {
   const w = W[P.weapon], am = P.ammo[P.weapon];
@@ -1139,7 +1170,12 @@ function oppTargets() {
   const s = OPP.cur; if (!s || !s.a) return null;
   return hitboxesAt(s.x, s.y, s.z, s.c);
 }
+function inspect() {
+  if (!P.alive || P.reloadEnd || now() < P.drawEnd || P.zoom) return;
+  if (P.weapon === 'knife') P.kAnim = { type: 'inspect', t0: now() }; else P.inspT = now();
+}
 function shoot(t, heavy) {
+  P.inspT = 0; if (P.kAnim && P.kAnim.type === 'inspect') P.kAnim = null;
   const w = W[P.weapon], e = eyePos(), targets = oppTargets();
   if (w.melee) {
     P.nextFire = t + (heavy ? w.heavyRof : w.rof); P.swing = 1; AU.shot('knife', 0.7, 0);
@@ -1226,7 +1262,7 @@ function botUpdate(dt, t) {
     const live = v.ph === 'live', eye = [B.pos.x, B.pos.y + 1.62, B.pos.z];
     let vis = false;
     if (live && P.alive) {
-      const head = [P.pos.x, P.pos.y + (P.crouch ? 1.18 : 1.66), P.pos.z], chest = [P.pos.x, P.pos.y + (P.crouch ? 0.85 : 1.2), P.pos.z];
+      const head = [P.pos.x, P.pos.y + (P.crouch ? 1.02 : 1.66), P.pos.z], chest = [P.pos.x, P.pos.y + (P.crouch ? 0.72 : 1.2), P.pos.z];
       const yawTo = Math.atan2(-(P.pos.x - B.pos.x), -(P.pos.z - B.pos.z));
       if ((Math.abs(angDiff(B.yaw, yawTo)) < 1.4 || t < B.knowsUntil) && (clearLine(eye, head) || clearLine(eye, chest))) vis = true;
     }
@@ -1235,7 +1271,7 @@ function botUpdate(dt, t) {
       B.lastSeen.copy(P.pos); B.knowsUntil = t + 3500;
     } else B.see = false;
     if (B.see) {
-      const tp = [P.pos.x, P.pos.y + (B.aimHead ? (P.crouch ? 1.16 : 1.64) : (P.crouch ? 0.85 : 1.2)), P.pos.z];
+      const tp = [P.pos.x, P.pos.y + (B.aimHead ? (P.crouch ? 1.0 : 1.64) : (P.crouch ? 0.72 : 1.2)), P.pos.z];
       const dx = tp[0] - eye[0], dy = tp[1] - eye[1], dz = tp[2] - eye[2], hd = Math.hypot(dx, dz);
       if (t > B.errT) { B.errT = t + 250; B.ex = (Math.random() * 2 - 1) * B.err; B.ey = (Math.random() * 2 - 1) * B.err * 0.6; B.err *= 0.72; }
       const ty = Math.atan2(-dx, -dz) + B.ex, tpi = Math.atan2(dy, hd) + B.ey, turn = L.turn * dt;
@@ -1298,7 +1334,7 @@ function updateOpp(dt, t) {
   OPP.crouchK += ((s.c ? 1 : 0) - OPP.crouchK) * Math.min(1, dt * 14);
   oppGroup.position.set(s.x, s.y + OPP.fall * 0.15, s.z);
   oppGroup.rotation.set(-OPP.fall * Math.PI / 2 * 0.95, s.yaw, 0, 'YXZ');
-  oppLegs.scale.y = 1 - 0.62 * OPP.crouchK; oppUpper.position.y = -0.5 * OPP.crouchK;
+  oppLegs.scale.y = 1 - 0.8 * OPP.crouchK; oppUpper.position.y = -TUCK * OPP.crouchK;
   oppFlash.visible = t < OPP.flashUntil;
   const sp = Math.hypot(s.x - OPP.px, s.z - OPP.pz) / Math.max(dt, 1e-3);
   OPP.spd += (sp - OPP.spd) * Math.min(1, dt * 10);
@@ -1323,13 +1359,30 @@ function updateVM(dt, t) {
   for (const k of ORDER) vmGuns[k].visible = (k === P.weapon);
   const b = VM_BASE[P.weapon], w = W[P.weapon], hs = Math.hypot(P.vel.x, P.vel.z), mv = P.onGround ? clamp(hs / 6, 0, 1) : 0;
   P.bob += dt * hs * 1.9;
-  const drawK = t < P.drawEnd ? clamp((P.drawEnd - t) / w.draw, 0, 1) : 0;
+  const drawK = (t < P.drawEnd && P.weapon !== 'knife') ? clamp((P.drawEnd - t) / w.draw, 0, 1) : 0;
   const relK = P.reloadEnd ? Math.sin(clamp(1 - (P.reloadEnd - t) / w.reload, 0, 1) * Math.PI) : 0;
   vmRoot.position.set(b[0] + Math.sin(P.bob) * .008 * mv, b[1] - Math.abs(Math.cos(P.bob)) * .008 * mv - drawK * .25 - relK * .08 + (P.onGround ? 0 : .012), b[2] + P.kick * .045);
   const sw = Math.exp(-dt * 9); P.swayX *= sw; P.swayY *= sw;
   vmRoot.position.x -= P.swayX * .00005; vmRoot.position.y += P.swayY * .00005;
   vmRoot.rotation.set(P.kick * .07 + relK * .5 - drawK * .6 - P.swayY * .00012, VM_YAW[P.weapon] - P.swing * .7 - P.swayX * .00012, P.swing * .35);
   if (vmFlash[P.weapon]) { vmFlash[P.weapon].visible = t < P.flashT; vmFlash[P.weapon].rotation.z = Math.random() * TAU; }
+  // inspecionar arma de fogo: vira de lado e volta
+  const ik = P.inspT ? clamp((t - P.inspT) / 1800, 0, 1) : 0; if (ik >= 1) P.inspT = 0;
+  const ins = Math.sin(ik * Math.PI);
+  vmRoot.rotation.y += ins * .9; vmRoot.rotation.z += ins * .35; vmRoot.position.x -= ins * .05; vmRoot.position.y += ins * .02;
+  // karambit: giro no anel ao sacar e ao inspecionar
+  if (P.weapon === 'knife' && vmKnife) {
+    const a = P.kAnim, el = a ? t - a.t0 : 0; let spin = 0, turn = 0, lift = 0;
+    if (a && a.type === 'draw') { const k = clamp(el / 600, 0, 1); spin = (1 - Math.pow(1 - k, 3)) * TAU; lift = (1 - k) * -.06; if (k >= 1) P.kAnim = null; }
+    else if (a && a.type === 'inspect') {
+      if (el < 1000) { const k = el / 1000; spin = (k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2) * 2 * TAU; lift = Math.sin(k * Math.PI) * .03; }
+      else if (el < 2600) { const k = (el - 1000) / 1600; turn = Math.sin(k * Math.PI) * 1.4; lift = Math.sin(k * Math.PI) * .05; }
+      else P.kAnim = null;
+    }
+    vmKnife.pivot.rotation.x = -spin;
+    vmKnife.holder.rotation.set(KH_ROT[0] + turn * .2, KH_ROT[1] - turn * .8, KH_ROT[2] - turn * .5);
+    vmKnife.holder.position.y = lift;
+  }
 }
 
 /* ================= HUD ================= */
@@ -1379,7 +1432,7 @@ function flashRed() {
   el.red.style.transition = 'none'; el.red.style.opacity = 1;
   clearTimeout(redT); redT = setTimeout(() => { el.red.style.transition = 'opacity .5s'; el.red.style.opacity = 0; }, 80);
 }
-const WSHORT = { rifle: 'AK', pistol: 'DEAGLE', knife: 'FACA', sniper: 'AWP' };
+const WSHORT = { rifle: 'AK', pistol: 'DEAGLE', knife: 'KARAMBIT', sniper: 'AWP' };
 function addFeed(killer, victim, w, hs) {
   const d = document.createElement('div');
   if (killer === G.me || victim === G.me) d.className = 'mine';
@@ -1475,7 +1528,8 @@ document.addEventListener('keydown', e => {
   keys.add(e.code);
   if (SLOT[e.code]) selectWeapon(SLOT[e.code]);
   else if (e.code === 'KeyQ') selectWeapon(P.lastW);
-  else if (e.code === 'KeyR') startReload(now());
+  else if (e.code === 'KeyR') { P.inspT = 0; startReload(now()); }
+  else if (e.code === 'KeyF') inspect();
 });
 document.addEventListener('keyup', e => { keys.delete(e.code); });
 window.addEventListener('blur', () => { keys.clear(); P.m1 = false; });
