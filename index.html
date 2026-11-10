@@ -458,7 +458,7 @@ const MAPS = {
   fortes: { name: 'Fortes', theme: 'laranja', ax: 15, az: 25, spawn: { hx: 6, z0: 21.4, z1: 23.8 },
     build(B, K) {
       B.pairSolid([-15, 0, -25], [15, 1.2, -13], K.plat);        // cada lado tem um forte elevado
-      B.pairSolid([-7.5, 1.2, -20.9], [7.5, 4.4, -20.1], K.shield);
+      MAP.exit = { zc: -20.5, hw: 7.5 }; B.pairSolid([-7.5, 1.2, -20.9], [7.5, 4.4, -20.1], K.shield);
       B.pairRamp(-9, -13, -6.6, -7.5, 0, 1.2, '-z', K.ramp);   // duas rampas descendo do forte
       B.pairRamp(6.6, -13, 9, -7.5, 0, 1.2, '-z', K.ramp);
       B.pair(-11.5, -13.6, C, C, C, K.crate, 1.2);              // ameias na beira do forte
@@ -527,7 +527,7 @@ function buildMap(id) {
     pair: (x, z, w, d, h, col, y0 = 0) => { B.box(x, z, w, d, h, col, y0); B.box(-x, -z, w, d, h, col, y0); },
     pairSolid: (a, b, col) => { solid(a, b, col); const m = mirrorBox(a, b); solid(m[0], m[1], col); },
     pairRamp: (x0, z0, x1, z1, y0, y1, dir, col) => { ramp(x0, z0, x1, z1, y0, y1, dir, col); ramp(-x1, -z1, -x0, -z0, y0, y1, RAMP_FLIP[dir], col); },
-    shield: (zc, hw) => B.pairSolid([-hw, 0, zc - .4], [hw, 3.2, zc + .4], K.shield),
+    shield: (zc, hw) => { MAP.exit = { zc, hw }; B.pairSolid([-hw, 0, zc - .4], [hw, 3.2, zc + .4], K.shield); },
   };
   solid([-AX - 1, -1, -AZ - 1], [AX + 1, 0, AZ + 1], K.floor);
   solid([-AX - 1, 0, -AZ - 1], [-AX, WALL_H, AZ + 1], K.wall);
@@ -767,7 +767,7 @@ const GUNS = {
 const ARMS = {
   rifle:  [{ hand: [0, -.045, -.42], from: [0, -.06, -.40], to: [-.24, -.34, -.02] }, { hand: [0, -.09, 0], from: [.01, -.10, .03], to: [.17, -.32, .32] }],
   pistol: [{ hand: [-.025, -.09, -.01], from: [-.03, -.10, .01], to: [-.22, -.33, .26] }, { hand: [.012, -.085, .005], from: [.02, -.10, .03], to: [.16, -.33, .32] }],
-  knife:  [{ hand: null, from: [.02, -.03, .0], to: [.16, -.27, .30] }],
+  knife:  [{ hand: null, from: [.03, -.08, .02], to: [.26, -.30, .30] }],
   sniper: [{ hand: [0, -.05, -.45], from: [0, -.065, -.43], to: [-.24, -.34, -.04] }, { hand: [0, -.09, .01], from: [.01, -.10, .04], to: [.17, -.32, .33] }],
 };
 vmScene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75));
@@ -784,7 +784,7 @@ function limb(group, from, to, thick, mat) {
   group.add(m);
 }
 const MUZZLE = { rifle: [0, .01, -.67], pistol: [0, .022, -.26], sniper: [0, .011, -.89] };
-const VM_BASE = { rifle: [.15, -.16, -.40], pistol: [.13, -.14, -.40], knife: [.15, -.15, -.38], sniper: [.15, -.16, -.38] };
+const VM_BASE = { rifle: [.15, -.16, -.40], pistol: [.13, -.14, -.40], knife: [.10, -.035, -.36], sniper: [.15, -.16, -.38] };
 const VM_YAW = { rifle: .05, pistol: .03, knife: -.15, sniper: .05 };
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: .95, depthWrite: false, blending: THREE.AdditiveBlending });
 const flashGeo = new THREE.PlaneGeometry(.13, .13);
@@ -792,18 +792,22 @@ const vmRoot = new THREE.Group(); vmRoot.scale.setScalar(0.5); vmScene.add(vmRoo
 const vmGuns = {}, vmFlash = {};
 // karambit: lâmina curva em garra, cabo e anel para o dedo; gira em volta do anel
 const bladeMat = new THREE.MeshLambertMaterial({ color: 0xd4d9df }), darkMat = new THREE.MeshLambertMaterial({ color: 0x1d1e21 });
-const KH_ROT = [0.35, -0.85, 0.45];
+// pegada: anel em cima (dedo), cabo descendo dentro da mão, lâmina sai por baixo e curva para a frente:
+// ponta e lado côncavo apontam para a frente
+const KH_ROT = [0.45, 1.25, 0.15], KH_FACE = 1.5; // KH_FACE: durante o giro o plano da faca vira para a câmera
 function buildKarambit() {
   const k = new THREE.Group();
   const ring = new THREE.Mesh(new THREE.TorusGeometry(.024, .007, 6, 16), darkMat); ring.rotation.y = Math.PI / 2; k.add(ring);
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(.018, .026, .10), darkMat); handle.position.set(0, 0, -.08); k.add(handle);
-  const guard = new THREE.Mesh(new THREE.BoxGeometry(.02, .04, .008), darkMat); guard.position.set(0, -.004, -.13); k.add(guard);
-  const R = .11, cz = -.13, N = 12, T = 1.35;
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(.018, .10, .028), darkMat); handle.position.set(0, -.08, 0); k.add(handle);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(.02, .008, .042), darkMat); guard.position.set(0, -.13, -.004); k.add(guard);
+  const R = .12, y0 = -.13, N = 14, T = 1.55;
   for (let i = 0; i < N; i++) {
     const th = (i + .5) / N * T, w = .034 * (1 - i / N) + .004;
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(.005, w, R * T / N * 1.1), bladeMat);
-    seg.position.set(0, -R + R * Math.cos(th) - Math.cos(th) * w / 2, cz - R * Math.sin(th) + Math.sin(th) * w / 2);
-    seg.rotation.x = -th; k.add(seg);
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(.005, w, R * T / N * 1.12), bladeMat);
+    // arco com centro à frente do início da lâmina: começa descendo e termina apontando para a frente (-z)
+    const px = 0, py = y0 - R * Math.sin(th), pz = -R + R * Math.cos(th);
+    seg.position.set(px, py + Math.sin(th) * w / 2, pz - Math.cos(th) * w / 2);
+    seg.rotation.x = th - Math.PI / 2; k.add(seg);
   }
   return k;
 }
@@ -812,7 +816,7 @@ for (const k of ORDER) {
   const g = new THREE.Group(); if (GUNS[k].length) g.add(boxModel(GUNS[k]));
   if (k === 'knife') {
     const holder = new THREE.Group(); holder.rotation.set(...KH_ROT);
-    const hand = new THREE.Mesh(gloveGeo, skinMat); hand.position.set(0, -.01, -.06); holder.add(hand);
+    const hand = new THREE.Mesh(gloveGeo, skinMat); hand.position.set(0, -.075, 0); holder.add(hand);
     const pivot = buildKarambit(); holder.add(pivot); g.add(holder); vmKnife = { holder, pivot };
   }
   for (const a of ARMS[k]) { if (a.hand) { const h = new THREE.Mesh(gloveGeo, skinMat); h.position.set(...a.hand); g.add(h); } limb(g, a.from, a.to, .072, sleeveMat); }
@@ -1116,6 +1120,7 @@ function spawnSelf(side, spec) {
   P.recoilP = P.recoilY = P.shots = P.spread = 0; P.zoom = 0; P.reloadEnd = 0; P.tagUntil = 0; P.killedBy = null;
   refillAmmo(P);
   if (P.weapon === 'knife') P.weapon = 'rifle';
+  P.kAnim = null; P.inspT = 0;
   P.drawEnd = now() + 300; applyFov();
 }
 function playerInput(dt, t) {
@@ -1240,11 +1245,37 @@ const LEVELS = {
 };
 const BOT = { pos: new V3(0, 0, 20), vel: new V3(), yaw: 0, pitch: 0, h: H_STAND, crouch: false, onGround: true, hp: 100, alive: true, w: 'rifle',
   nextFire: 0, see: false, reactAt: 0, aimHead: false, err: 0, ex: 0, ey: 0, errT: 0, lastSeen: new V3(), knowsUntil: 0, wp: null,
-  stuckCheck: 0, lastPos: new V3(), strafe: 1, strafeT: 0, burst: 0, pauseUntil: 0, shots: 0, tagUntil: 0, airCap: 0 };
+  stuckCheck: 0, lastPos: new V3(), route: [], strafe: 1, strafeT: 0, burst: 0, pauseUntil: 0, shots: 0, tagUntil: 0, airCap: 0 };
 function botSpawn(side, spec) {
   const sp = spawnPoint(side ? 1 : 0, spec);
   BOT.pos.set(sp.x, sp.y, sp.z); BOT.vel.set(0, 0, 0); BOT.yaw = sp.yaw; BOT.pitch = 0; BOT.hp = 100; BOT.alive = true;
-  BOT.see = false; BOT.knowsUntil = 0; BOT.wp = null; BOT.burst = 0; BOT.shots = 0; BOT.tagUntil = 0;
+  BOT.see = false; BOT.knowsUntil = 0; BOT.burst = 0; BOT.shots = 0; BOT.tagUntil = 0;
+  // rota de saída: contorna a parede da base pelo lado mais perto e segue para o meio
+  const ex = MAP.exit || { zc: -AZ * .8, hw: 7 }, sz = sp.z < 0 ? -1 : 1, sx = sp.x === 0 ? (Math.random() < .5 ? -1 : 1) : Math.sign(sp.x);
+  const w1 = freeNear(sx * (ex.hw + 1.1), sz * (Math.abs(ex.zc) + .2));
+  // segundo ponto: à frente da saída, com caminho reto livre (testa vários desvios laterais)
+  let w2 = null;
+  for (const dz of [4.5, 6, 3.5, 7.5]) { for (const dx of [0, 1.5, -1.5, 3, -3, 4.5]) { const c = freeNear(w1.x + sx * dx, sz * (Math.abs(ex.zc) - dz)); if (pathClear(w1, c)) { w2 = c; break; } } if (w2) break; }
+  let w3 = null;
+  for (let i = 0; i < 20 && !w3; i++) { const c = randomMid(); if (pathClear(w2 || w1, c)) w3 = c; }
+  BOT.route = [w1, w2, w3].filter(Boolean); if (BOT.route.length < 3) BOT.route.push(randomMid());
+  BOT.wp = BOT.route.shift();
+}
+function freeNear(x, z) { // ponto livre mais perto de (x, z): fora de caixas e rampas
+  for (const r of [0, .8, 1.6, 2.4, 3.2]) for (const [dx, dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
+    const X = x + dx * r, Z = z + dz * r;
+    if (Math.abs(X) < AX - .6 && Math.abs(Z) < AZ - .6 && !overlapAny(X, 0.01, Z, H_STAND) && rampH(X, Z) === -Infinity) return new V3(X, 0, Z);
+  }
+  return new V3(x, 0, z);
+}
+function pathClear(a, b) { // corredor reto entre a e b sem caixas e sem rampas
+  const d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(d / .3));
+  for (let i = 1; i <= n; i++) { const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n; if (overlapAny(x, 0.01, z, H_STAND) || rampH(x, z) > -Infinity) return false; }
+  return true;
+}
+function randomMid() {
+  for (let i = 0; i < 30; i++) { const x = (Math.random() * 2 - 1) * (AX - 2), z = (Math.random() * 2 - 1) * 7; if (!overlapAny(x, 0.01, z, H_STAND) && rampH(x, z) === -Infinity) return new V3(x, 0, z); }
+  return new V3(0, 0, 0);
 }
 function randomPoint() {
   for (let i = 0; i < 30; i++) { const x = (Math.random() * 2 - 1) * (AX - 1.5), z = (Math.random() * 2 - 1) * (AZ - 4); if (!overlapAny(x, 0.01, z, H_STAND) && rampH(x, z) === -Infinity) return new V3(x, 0, z); }
@@ -1282,11 +1313,11 @@ function botUpdate(dt, t) {
       if (!(shootNow && L.counter)) { wx = Math.cos(B.yaw) * B.strafe; wz = -Math.sin(B.yaw) * B.strafe; }
     } else if (live) {
       let tgt = t < B.knowsUntil ? B.lastSeen : B.wp;
-      if (!tgt || (tgt === B.wp && Math.hypot(tgt.x - B.pos.x, tgt.z - B.pos.z) < 1.2)) { B.wp = randomPoint(); tgt = B.wp; }
+      if (!tgt || (tgt === B.wp && Math.hypot(tgt.x - B.pos.x, tgt.z - B.pos.z) < 1.2)) { B.wp = (B.route && B.route.length) ? B.route.shift() : randomPoint(); tgt = B.wp; }
       const dx = tgt.x - B.pos.x, dz = tgt.z - B.pos.z, d = Math.hypot(dx, dz);
       if (d > 0.8) { wx = dx / d; wz = dz / d; B.yaw += clamp(angDiff(B.yaw, Math.atan2(-dx, -dz)), -4 * dt, 4 * dt); B.pitch *= 0.9; }
       else if (tgt === B.lastSeen) B.knowsUntil = 0;
-      if (t > B.stuckCheck) { if (Math.hypot(B.pos.x - B.lastPos.x, B.pos.z - B.lastPos.z) < 0.4) { B.wp = randomPoint(); B.knowsUntil = 0; } B.lastPos.copy(B.pos); B.stuckCheck = t + 700; }
+      if (t > B.stuckCheck) { if (Math.hypot(B.pos.x - B.lastPos.x, B.pos.z - B.lastPos.z) < 0.4) { B.wp = (B.route && B.route.length) ? B.route.shift() : randomPoint(); B.knowsUntil = 0; } B.lastPos.copy(B.pos); B.stuckCheck = t + 700; }
     }
     if (v.ph === 'freeze') { wx = 0; wz = 0; }
   }
@@ -1372,15 +1403,18 @@ function updateVM(dt, t) {
   vmRoot.rotation.y += ins * .9; vmRoot.rotation.z += ins * .35; vmRoot.position.x -= ins * .05; vmRoot.position.y += ins * .02;
   // karambit: giro no anel ao sacar e ao inspecionar
   if (P.weapon === 'knife' && vmKnife) {
-    const a = P.kAnim, el = a ? t - a.t0 : 0; let spin = 0, turn = 0, lift = 0;
-    if (a && a.type === 'draw') { const k = clamp(el / 600, 0, 1); spin = (1 - Math.pow(1 - k, 3)) * TAU; lift = (1 - k) * -.06; if (k >= 1) P.kAnim = null; }
-    else if (a && a.type === 'inspect') {
-      if (el < 1000) { const k = el / 1000; spin = (k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2) * 2 * TAU; lift = Math.sin(k * Math.PI) * .03; }
-      else if (el < 2600) { const k = (el - 1000) / 1600; turn = Math.sin(k * Math.PI) * 1.4; lift = Math.sin(k * Math.PI) * .05; }
+    const a = P.kAnim, el = a ? t - a.t0 : 0; let spin = 0, face = 0, turn = 0, lift = 0;
+    const ease = k => k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    if (a && a.type === 'draw') { // um 360 completo no anel ao sacar
+      const k = clamp(el / 600, 0, 1); spin = ease(k) * TAU; face = Math.sin(k * Math.PI); lift = (1 - k) * -.05; if (k >= 1) P.kAnim = null;
+    } else if (a && a.type === 'inspect') {
+      if (el < 700) { const k = el / 700; spin = ease(k) * TAU; face = Math.sin(k * Math.PI); lift = Math.sin(k * Math.PI) * .03; }   // 360
+      else if (el < 1400) { const k = (el - 700) / 700; spin = ease(k) * TAU; face = Math.sin(k * Math.PI); lift = Math.sin(k * Math.PI) * .03; } // outro 360
+      else if (el < 3000) { const k = (el - 1400) / 1600; turn = Math.sin(k * Math.PI); lift = turn * .05; }                         // mostra a lâmina
       else P.kAnim = null;
     }
-    vmKnife.pivot.rotation.x = -spin;
-    vmKnife.holder.rotation.set(KH_ROT[0] + turn * .2, KH_ROT[1] - turn * .8, KH_ROT[2] - turn * .5);
+    vmKnife.pivot.rotation.x = spin;
+    vmKnife.holder.rotation.set(KH_ROT[0] + turn * .25, KH_ROT[1] + (KH_FACE - KH_ROT[1]) * Math.max(face, turn * .85), KH_ROT[2] - turn * .4);
     vmKnife.holder.position.y = lift;
   }
 }
