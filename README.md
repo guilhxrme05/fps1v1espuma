@@ -21,16 +21,17 @@ Arena simétrica (girada 180°), chão branco e caixas azul-claro. Cada base fic
 - Primeiro a 10 rodadas vence (dá para mudar para 5, 8, 13 ou 16).
 - 3 s de freeze no começo de cada rodada. Rodada acaba na primeira morte.
 - Se o tempo acabar, vence quem tiver mais vida.
-- 100 de vida, sem colete. Cabeça leva 4x, pernas 75%.
+- 100 de vida, sem colete. Cabeça leva 4x. Na AK e na Deagle, corpo e pernas levam o mesmo dano.
+- Lado e ponto de nascimento são sorteados a cada rodada.
 
 | Arma | Corpo | Cabeça | Velocidade |
 |---|---|---|---|
-| AK-47 (1) | 36 | 144 | 5,4 m/s |
-| Desert Eagle (2) | 53 | 212 | 5,73 m/s |
+| AK-47 (1) | 27 | 144 | 5,4 m/s |
+| Desert Eagle (2) | 40 | 212 | 5,73 m/s |
 | Faca (3) | 40 / 65 | — | 6,75 m/s |
 | AWP (4) | 115 | 460 | 5,13 m/s |
 
-Andar com Shift fica em 55% da velocidade e não faz barulho de passo. Agachado fica em 40%. Atirar correndo ou no ar é impreciso; parado ou agachado é preciso, como no CS. A AK tem padrão de spray.
+O movimento tem inércia como no Valorant: trocar de A para D perde velocidade, soltar as teclas desliza um pouco e apertar a direção contrária (contra-strafe) para na hora. Andar com Shift fica em 55% da velocidade e não faz barulho de passo. Agachado fica em 40%. Atirar correndo ou no ar é impreciso; parado ou agachado é preciso, como no CS. A AK tem padrão de spray.
 
 ## Controles
 
@@ -49,6 +50,8 @@ Andar com Shift fica em 55% da velocidade e não faz barulho de passo. Agachado 
 | Esc | Menu e configurações |
 
 ## Configurações
+
+- **Cor do boneco:** escolha antes de entrar na sala. É a cor que o oponente vê.
 
 - **Mira:** estilo estático ou dinâmico, cor, tamanho, espessura, espaço, contorno, ponto central, formato T, opacidade.
 - **Mouse:** sensibilidade na escala do CS (mostra o equivalente no Valorant e os cm/360 pelo seu DPI) e sensibilidade da luneta.
