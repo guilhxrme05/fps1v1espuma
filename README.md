@@ -31,7 +31,7 @@ Arena simétrica (girada 180°), chão branco e caixas azul-claro. Cada base fic
 | Faca (3) | 40 / 65 | — | 6,75 m/s |
 | AWP (4) | 115 | 460 | 5,13 m/s |
 
-O movimento tem inércia como no Valorant: trocar de A para D perde velocidade, soltar as teclas desliza um pouco e apertar a direção contrária (contra-strafe) para na hora. Andar com Shift fica em 55% da velocidade e não faz barulho de passo. Agachado fica em 40%. Atirar correndo ou no ar é impreciso; parado ou agachado é preciso, como no CS. A AK tem padrão de spray.
+O movimento tem inércia como no Valorant: trocar de A para D perde velocidade, e soltar as teclas para o boneco quase na hora (não precisa de contra-strafe). Andar com Shift fica em 55% da velocidade e não faz barulho de passo. Agachado fica em 40%. Atirar correndo ou no ar é impreciso; parado ou agachado é preciso, como no CS. A AK tem padrão de spray.
 
 ## Controles
 
