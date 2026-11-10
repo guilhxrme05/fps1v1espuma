@@ -794,7 +794,8 @@ const vmGuns = {}, vmFlash = {};
 const bladeMat = new THREE.MeshLambertMaterial({ color: 0xd4d9df }), darkMat = new THREE.MeshLambertMaterial({ color: 0x1d1e21 });
 // pegada de karambit: punho direito fechado no cabo, anel saindo do lado esquerdo do punho (dedo indicador),
 // lâmina saindo pela direita e curvando para cima; mão esquerda aberta ao lado. Tudo no estilo de blocos do jogo.
-const KH_ROT = [0.12, -0.35, 0.05];
+const KH_ROT = [0, -0.2, 0];
+const RH_ROT = [0.75, -0.3, 0.25]; // topo do punho e da lâmina virados para cima, para a câmera
 const gloveMat = new THREE.MeshLambertMaterial({ color: 0x3a3d44 });
 function buildKarambit() {
   const k = new THREE.Group(); // origem = centro do anel (eixo do giro)
@@ -814,13 +815,14 @@ function buildKarambit() {
 function boxMesh(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; }
 function buildKnifeHands(g) {
   // mão direita (punho fechado) com a faca
-  const fist = new THREE.Group(); fist.position.set(.20, 0, 0);
-  fist.add(boxMesh(.09, .075, .07, gloveMat, 0, 0, 0));          // mão fechada
-  fist.add(boxMesh(.05, .022, .032, gloveMat, -.012, .046, -.022)); // polegar por cima do cabo
-  fist.add(boxMesh(.07, .03, .075, sleeveMat, .025, -.05, .03));   // punho da luva na cor do jogador
-  g.add(fist);
-  const holder = new THREE.Group(); holder.position.set(.20 - .083, .002, 0); holder.rotation.set(...KH_ROT);
-  const pivot = buildKarambit(); holder.add(pivot); g.add(holder);
+  // o grupo da mão direita inclina o topo do punho e a faca para a câmera (visto de cima)
+  const right = new THREE.Group(); right.position.set(.20, 0, 0); right.rotation.set(...RH_ROT);
+  right.add(boxMesh(.09, .075, .07, gloveMat, 0, 0, 0));          // mão fechada
+  right.add(boxMesh(.05, .022, .032, gloveMat, -.012, .046, -.022)); // polegar por cima do cabo
+  right.add(boxMesh(.07, .03, .075, sleeveMat, .025, -.05, .03));   // punho da luva na cor do jogador
+  g.add(right);
+  const holder = new THREE.Group(); holder.position.set(-.083, .002, 0); holder.rotation.set(...KH_ROT);
+  const pivot = buildKarambit(); holder.add(pivot); right.add(holder);
   limb(g, [.23, -.05, .03], [.42, -.42, .26], .075, sleeveMat);    // antebraço direito
   // mão esquerda aberta
   const lh = new THREE.Group(); lh.position.set(-.20, -.01, .02); lh.rotation.set(-.35, .35, .55);
@@ -830,7 +832,7 @@ function buildKnifeHands(g) {
   lh.add(boxMesh(.07, .03, .07, sleeveMat, -.005, -.05, .02));     // punho da luva
   g.add(lh);
   limb(g, [-.24, -.07, .05], [-.44, -.44, .26], .075, sleeveMat);  // antebraço esquerdo
-  return { holder, pivot };
+  return { holder, pivot, right };
 }
 let vmKnife = null;
 for (const k of ORDER) {
@@ -1421,18 +1423,23 @@ function updateVM(dt, t) {
   // karambit: giro no anel ao sacar e ao inspecionar
   if (P.weapon === 'knife' && vmKnife) {
     const a = P.kAnim, el = a ? t - a.t0 : 0; let spin = 0, face = 0, turn = 0, lift = 0;
-    const ease = k => k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-    if (a && a.type === 'draw') { // um 360 completo no anel ao sacar
-      const k = clamp(el / 600, 0, 1); spin = ease(k) * TAU; face = Math.sin(k * Math.PI); lift = (1 - k) * -.05; if (k >= 1) P.kAnim = null;
+    // giro rápido: a faca acelera no começo e desacelera no fim; o pulso dá um tranco junto (puxa e volta)
+    const easeSpin = k => 1 - Math.pow(1 - k, 2.6);
+    const flick = k => Math.sin(Math.min(k * 1.6, 1) * Math.PI);   // pulso puxa no início do giro e volta
+    let fl = 0;
+    const SPIN_MS = 380;
+    if (a && a.type === 'draw') {
+      const k = clamp(el / SPIN_MS, 0, 1); spin = easeSpin(k) * TAU; fl = flick(k); lift = (1 - k) * -.04; if (k >= 1) P.kAnim = null;
     } else if (a && a.type === 'inspect') {
-      if (el < 700) { const k = el / 700; spin = ease(k) * TAU; face = Math.sin(k * Math.PI); lift = Math.sin(k * Math.PI) * .03; }   // 360
-      else if (el < 1400) { const k = (el - 700) / 700; spin = ease(k) * TAU; face = Math.sin(k * Math.PI); lift = Math.sin(k * Math.PI) * .03; } // outro 360
-      else if (el < 3000) { const k = (el - 1400) / 1600; turn = Math.sin(k * Math.PI); lift = turn * .05; }                         // mostra a lâmina
+      if (el < SPIN_MS) { const k = el / SPIN_MS; spin = easeSpin(k) * TAU; fl = flick(k); }                                  // 360
+      else if (el < SPIN_MS * 2 + 60) { const k = clamp((el - SPIN_MS - 60) / SPIN_MS, 0, 1); spin = easeSpin(k) * TAU; fl = flick(k); } // outro 360
+      else if (el < SPIN_MS * 2 + 1500) { const k = (el - SPIN_MS * 2 - 60) / 1440; turn = Math.sin(k * Math.PI); lift = turn * .04; }   // mostra a lâmina
       else P.kAnim = null;
     }
-    vmKnife.pivot.rotation.z = spin; // gira no anel, de frente para a câmera
+    vmKnife.pivot.rotation.z = spin; // gira no anel
     vmKnife.holder.rotation.set(KH_ROT[0] + turn * .3, KH_ROT[1] - turn * 2.4, KH_ROT[2] + turn * .2);
-    vmKnife.holder.position.y = .002 + lift;
+    vmKnife.right.rotation.set(RH_ROT[0] - fl * .35, RH_ROT[1] + fl * .25, RH_ROT[2] + fl * .45);
+    vmKnife.right.position.set(.20 - fl * .015, lift + fl * .025, 0);
   }
 }
 
