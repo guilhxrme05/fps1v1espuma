@@ -767,7 +767,7 @@ const GUNS = {
 const ARMS = {
   rifle:  [{ hand: [0, -.045, -.42], from: [0, -.06, -.40], to: [-.24, -.34, -.02] }, { hand: [0, -.09, 0], from: [.01, -.10, .03], to: [.17, -.32, .32] }],
   pistol: [{ hand: [-.025, -.09, -.01], from: [-.03, -.10, .01], to: [-.22, -.33, .26] }, { hand: [.012, -.085, .005], from: [.02, -.10, .03], to: [.16, -.33, .32] }],
-  knife:  [{ hand: null, from: [.03, -.08, .02], to: [.26, -.30, .30] }],
+  knife:  [],
   sniper: [{ hand: [0, -.05, -.45], from: [0, -.065, -.43], to: [-.24, -.34, -.04] }, { hand: [0, -.09, .01], from: [.01, -.10, .04], to: [.17, -.32, .33] }],
 };
 vmScene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75));
@@ -784,41 +784,58 @@ function limb(group, from, to, thick, mat) {
   group.add(m);
 }
 const MUZZLE = { rifle: [0, .01, -.67], pistol: [0, .022, -.26], sniper: [0, .011, -.89] };
-const VM_BASE = { rifle: [.15, -.16, -.40], pistol: [.13, -.14, -.40], knife: [.10, -.035, -.36], sniper: [.15, -.16, -.38] };
-const VM_YAW = { rifle: .05, pistol: .03, knife: -.15, sniper: .05 };
+const VM_BASE = { rifle: [.15, -.16, -.40], pistol: [.13, -.14, -.40], knife: [0, -.085, -.30], sniper: [.15, -.16, -.38] };
+const VM_YAW = { rifle: .05, pistol: .03, knife: 0, sniper: .05 };
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: .95, depthWrite: false, blending: THREE.AdditiveBlending });
 const flashGeo = new THREE.PlaneGeometry(.13, .13);
 const vmRoot = new THREE.Group(); vmRoot.scale.setScalar(0.5); vmScene.add(vmRoot);
 const vmGuns = {}, vmFlash = {};
 // karambit: lâmina curva em garra, cabo e anel para o dedo; gira em volta do anel
 const bladeMat = new THREE.MeshLambertMaterial({ color: 0xd4d9df }), darkMat = new THREE.MeshLambertMaterial({ color: 0x1d1e21 });
-// pegada: anel em cima (dedo), cabo descendo dentro da mão, lâmina sai por baixo e curva para a frente:
-// ponta e lado côncavo apontam para a frente
-const KH_ROT = [0.45, 1.25, 0.15], KH_FACE = 1.5; // KH_FACE: durante o giro o plano da faca vira para a câmera
+// pegada de karambit: punho direito fechado no cabo, anel saindo do lado esquerdo do punho (dedo indicador),
+// lâmina saindo pela direita e curvando para cima; mão esquerda aberta ao lado. Tudo no estilo de blocos do jogo.
+const KH_ROT = [0.12, -0.35, 0.05];
+const gloveMat = new THREE.MeshLambertMaterial({ color: 0x3a3d44 });
 function buildKarambit() {
-  const k = new THREE.Group();
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(.024, .007, 6, 16), darkMat); ring.rotation.y = Math.PI / 2; k.add(ring);
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(.018, .10, .028), darkMat); handle.position.set(0, -.08, 0); k.add(handle);
-  const guard = new THREE.Mesh(new THREE.BoxGeometry(.02, .008, .042), darkMat); guard.position.set(0, -.13, -.004); k.add(guard);
-  const R = .12, y0 = -.13, N = 14, T = 1.55;
+  const k = new THREE.Group(); // origem = centro do anel (eixo do giro)
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.024, .007, 6, 16), darkMat); k.add(ring);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(.105, .026, .02), darkMat); handle.position.set(.083, 0, 0); k.add(handle);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(.008, .042, .022), darkMat); guard.position.set(.135, .004, 0); k.add(guard);
+  const R = .11, x0 = .139, N = 14, T = 1.45;
   for (let i = 0; i < N; i++) {
     const th = (i + .5) / N * T, w = .034 * (1 - i / N) + .004;
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(.005, w, R * T / N * 1.12), bladeMat);
-    // arco com centro à frente do início da lâmina: começa descendo e termina apontando para a frente (-z)
-    const px = 0, py = y0 - R * Math.sin(th), pz = -R + R * Math.cos(th);
-    seg.position.set(px, py + Math.sin(th) * w / 2, pz - Math.cos(th) * w / 2);
-    seg.rotation.x = th - Math.PI / 2; k.add(seg);
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(R * T / N * 1.12, w, .005), bladeMat);
+    // arco com centro acima do início da lâmina: sai para a direita e sobe, ponta para cima
+    seg.position.set(x0 + R * Math.sin(th) - Math.sin(th) * w / 2, R - R * Math.cos(th) + Math.cos(th) * w / 2, 0);
+    seg.rotation.z = th; k.add(seg);
   }
   return k;
+}
+function boxMesh(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; }
+function buildKnifeHands(g) {
+  // mão direita (punho fechado) com a faca
+  const fist = new THREE.Group(); fist.position.set(.20, 0, 0);
+  fist.add(boxMesh(.09, .075, .07, gloveMat, 0, 0, 0));          // mão fechada
+  fist.add(boxMesh(.05, .022, .032, gloveMat, -.012, .046, -.022)); // polegar por cima do cabo
+  fist.add(boxMesh(.07, .03, .075, sleeveMat, .025, -.05, .03));   // punho da luva na cor do jogador
+  g.add(fist);
+  const holder = new THREE.Group(); holder.position.set(.20 - .083, .002, 0); holder.rotation.set(...KH_ROT);
+  const pivot = buildKarambit(); holder.add(pivot); g.add(holder);
+  limb(g, [.23, -.05, .03], [.42, -.42, .26], .075, sleeveMat);    // antebraço direito
+  // mão esquerda aberta
+  const lh = new THREE.Group(); lh.position.set(-.20, -.01, .02); lh.rotation.set(-.35, .35, .55);
+  lh.add(boxMesh(.085, .075, .028, gloveMat, 0, 0, 0));            // palma
+  lh.add(boxMesh(.08, .07, .02, gloveMat, .01, .07, -.004));       // dedos
+  lh.add(boxMesh(.022, .05, .022, gloveMat, .055, .01, 0));        // polegar
+  lh.add(boxMesh(.07, .03, .07, sleeveMat, -.005, -.05, .02));     // punho da luva
+  g.add(lh);
+  limb(g, [-.24, -.07, .05], [-.44, -.44, .26], .075, sleeveMat);  // antebraço esquerdo
+  return { holder, pivot };
 }
 let vmKnife = null;
 for (const k of ORDER) {
   const g = new THREE.Group(); if (GUNS[k].length) g.add(boxModel(GUNS[k]));
-  if (k === 'knife') {
-    const holder = new THREE.Group(); holder.rotation.set(...KH_ROT);
-    const hand = new THREE.Mesh(gloveGeo, skinMat); hand.position.set(0, -.075, 0); holder.add(hand);
-    const pivot = buildKarambit(); holder.add(pivot); g.add(holder); vmKnife = { holder, pivot };
-  }
+  if (k === 'knife') vmKnife = buildKnifeHands(g);
   for (const a of ARMS[k]) { if (a.hand) { const h = new THREE.Mesh(gloveGeo, skinMat); h.position.set(...a.hand); g.add(h); } limb(g, a.from, a.to, .072, sleeveMat); }
   if (MUZZLE[k]) { const f = new THREE.Mesh(flashGeo, flashMat); f.position.set(...MUZZLE[k]); f.visible = false; g.add(f); vmFlash[k] = f; }
   g.visible = false; vmRoot.add(g); vmGuns[k] = g;
@@ -1413,9 +1430,9 @@ function updateVM(dt, t) {
       else if (el < 3000) { const k = (el - 1400) / 1600; turn = Math.sin(k * Math.PI); lift = turn * .05; }                         // mostra a lâmina
       else P.kAnim = null;
     }
-    vmKnife.pivot.rotation.x = spin;
-    vmKnife.holder.rotation.set(KH_ROT[0] + turn * .25, KH_ROT[1] + (KH_FACE - KH_ROT[1]) * Math.max(face, turn * .85), KH_ROT[2] - turn * .4);
-    vmKnife.holder.position.y = lift;
+    vmKnife.pivot.rotation.z = spin; // gira no anel, de frente para a câmera
+    vmKnife.holder.rotation.set(KH_ROT[0] + turn * .3, KH_ROT[1] - turn * 2.4, KH_ROT[2] + turn * .2);
+    vmKnife.holder.position.y = .002 + lift;
   }
 }
 
