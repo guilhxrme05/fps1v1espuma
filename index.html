@@ -185,6 +185,10 @@ button:disabled{opacity:.5;cursor:default}
 
   <section id="playSec" class="card" aria-label="Jogar">
     <label class="fld"><span>Apelido</span><input id="inName" type="text" maxlength="16" data-k="name" autocomplete="off"></label>
+    <label class="fld"><span>Mapa</span><select id="inMap" data-k="map">
+      <option value="caixas">Caixas · azul</option><option value="patio">Pátio · amarelo (praça elevada)</option><option value="torres">Torres · verde (torres com rampa)</option>
+      <option value="ponte">Ponte · roxo (ponte no meio)</option><option value="fortes">Fortes · laranja (bases elevadas)</option><option value="rotacao">Rotação · troca a cada rodada</option>
+    </select><small>Vale o mapa de quem criou a sala.</small></label>
     <div class="fld"><span>Cor do seu boneco</span><div class="sw" id="pcolors"></div><small>É nessa cor que o oponente vai te ver.</small></div>
     <div class="fld">
       <span>Código da sala</span>
@@ -302,7 +306,7 @@ const fin = n => typeof n === 'number' && isFinite(n);
 
 /* ================= Configurações ================= */
 const DEFAULTS = { name: 'Jogador', room: '', sens: 2, dpi: 800, zoomRatio: 1, fov: 90, scale: 1, volume: 0.6, showFps: true, crouchCtrl: false,
-  target: 10, roundTime: 60, botLevel: 'medio', pcol: 'vermelho',
+  target: 10, roundTime: 60, botLevel: 'medio', pcol: 'vermelho', map: 'caixas',
   ch: { style: 'static', color: '#3cff6e', len: 6, thick: 2, gap: 2, outline: true, dot: false, alpha: 1, tshape: false } };
 function genCode() { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let c = ''; for (let i = 0; i < 5; i++) c += a[Math.floor(Math.random() * a.length)]; return c; }
 function loadS() {
@@ -376,38 +380,178 @@ function geoFrom(out) {
 const basicMat = new THREE.MeshBasicMaterial({ vertexColors: true });
 function boxModel(list) { const o = { p: [], n: [], c: [] }; for (const [a, b, hex] of list) addBoxTo(o, a, b, hex, true, false); return new THREE.Mesh(geoFrom(o), basicMat); }
 
-/* ================= Mapa: arena de duelo ensolarada, cada base protegida por uma parede ================= */
-const C = 1.2, MS = 0.95, AX = 16 * MS, AZ = 26 * MS, WALL_H = 7; // MS: escala da planta do mapa (caixas mantêm o tamanho)
-const COL = { floor: 0xeceff1, wall: 0x7fb6e0, shield: 0x6aa6d6, crate: 0xa8d8f5, crate2: 0x8cc6ee };
-const boxes = [];
-const world = { p: [], n: [], c: [] };
-function solid(a, b, hex) { addBoxTo(world, a, b, hex, false, true); boxes.push({ min: a, max: b }); }
-solid([-AX - 1, -1, -AZ - 1], [AX + 1, 0, AZ + 1], COL.floor);
-solid([-AX - 1, 0, -AZ - 1], [-AX, WALL_H, AZ + 1], COL.wall);
-solid([AX, 0, -AZ - 1], [AX + 1, WALL_H, AZ + 1], COL.wall);
-solid([-AX, 0, -AZ - 1], [AX, WALL_H, -AZ], COL.wall);
-solid([-AX, 0, AZ], [AX, WALL_H, AZ + 1], COL.wall);
-// parede na frente de cada base: ninguém nasce vendo o outro; a saída é pelas laterais
-solid([-8 * MS, 0, -21 * MS - .4], [8 * MS, 3.2, -21 * MS + .4], COL.shield);
-solid([-8 * MS, 0, 21 * MS - .4], [8 * MS, 3.2, 21 * MS + .4], COL.shield);
-// metade A; a outra metade é espelhada em ponto (rotação de 180°) para o mapa ser justo
-const HALF = [[-11,-18,2*C,C,C],[11.5,-17,C,C,2*C],[-4,-15,C,C,C],[4,-14,2*C,C,C],[-13,-10,C,2*C,C],[8.5,-9.5,C,C,2*C],
-  [-6,-7.5,2*C,C,C],[1,-7,C,C,C],[13,-4,C,2*C,C],[-9.5,-2.5,C,C,2*C],[4,-2,C,C,2*C],
-  // cobertura logo na saída da base e no caminho para o meio
-  [-9,-19.5,C,C,C],[9.5,-19,C,2*C,C],[0,-17.5,2*C,C,C],[-6,-12,C,C,2*C],[6.5,-11,C,C,C],[-1.5,-11,C,C,C],[-3,-4.5,C,C,C],[7,-5.5,C,C,C]];
-const TOPS = [[-11.6,-18],[4.6,-14],[13,-4.6]]; // caixa empilhada em cima de uma caixa baixa
-function crate(x, z, w, d, y0, h, col) { x *= MS; z *= MS; solid([x - w / 2, y0, z - d / 2], [x + w / 2, y0 + h, z + d / 2], col); }
-for (const [x, z, w, d, h] of HALF) { const col = h > C ? COL.crate2 : COL.crate; crate(x, z, w, d, 0, h, col); crate(-x, -z, w, d, 0, h, col); }
-for (const [x, z] of TOPS) { crate(x, z, C, C, C, C, COL.crate2); crate(-x, -z, C, C, C, C, COL.crate2); }
-crate(0, 0, 2 * C, 2 * C, 0, C, COL.crate);
+/* ================= Mapas ================= */
+// Cada mapa é simétrico por rotação de 180° (B.pair espelha (x,z) em (-x,-z)), tem uma parede na frente de cada base
+// e uma cor própria. Rampas levam a lugares altos.
+const C = 1.2, WALL_H = 7, STEP_UP = 0.5;
+let AX = 16, AZ = 26, boxes = [], ramps = [], MAP = null, worldMesh = null;
+const THEMES = {
+  azul:    { floor: 0xeceff1, wall: 0x7fb6e0, shield: 0x6aa6d6, crate: 0xa8d8f5, crate2: 0x8cc6ee, plat: 0x94cbef, ramp: 0x9fd1f2 },
+  amarelo: { floor: 0xf3f1ea, wall: 0xe3bd4f, shield: 0xd6ad3e, crate: 0xf6de86, crate2: 0xecd06a, plat: 0xefd679, ramp: 0xf2da80 },
+  verde:   { floor: 0xeef2ec, wall: 0x7fc277, shield: 0x6db466, crate: 0xade3a5, crate2: 0x93d48b, plat: 0x9ed99a, ramp: 0xa6dda0 },
+  roxo:    { floor: 0xf2f0f6, wall: 0xa990e0, shield: 0x977cd4, crate: 0xd0bdf3, crate2: 0xbba4ea, plat: 0xc3adef, ramp: 0xc9b5f1 },
+  laranja: { floor: 0xf2efeb, wall: 0xe39a55, shield: 0xd68a45, crate: 0xf6be86, crate2: 0xeeab6a, plat: 0xf0b478, ramp: 0xf3b97f },
+};
+const MS = 0.95;
+const MAPS = {
+  caixas: { name: 'Caixas', theme: 'azul', ax: 16 * MS, az: 26 * MS, spawn: { hx: 6.5 * MS, z0: 22.4 * MS, z1: 25.2 * MS },
+    build(B, K) {
+      B.shield(-21 * MS, 8 * MS);
+      const HALF = [[-11,-18,2*C,C,C],[11.5,-17,C,C,2*C],[-4,-15,C,C,C],[4,-14,2*C,C,C],[-13,-10,C,2*C,C],[8.5,-9.5,C,C,2*C],
+        [-6,-7.5,2*C,C,C],[1,-7,C,C,C],[13,-4,C,2*C,C],[-9.5,-2.5,C,C,2*C],[4,-2,C,C,2*C],
+        [-9,-19.5,C,C,C],[9.5,-19,C,2*C,C],[0,-17.5,2*C,C,C],[-6,-12,C,C,2*C],[6.5,-11,C,C,C],[-1.5,-11,C,C,C],[-3,-4.5,C,C,C],[7,-5.5,C,C,C]];
+      for (const [x, z, w, d, h] of HALF) B.pair(x * MS, z * MS, w, d, h, h > C ? K.crate2 : K.crate);
+      for (const [x, z] of [[-11.6,-18],[4.6,-14],[13,-4.6]]) B.pair(x * MS, z * MS, C, C, C, K.crate2, C);
+      B.box(0, 0, 2 * C, 2 * C, C, K.crate);
+    } },
+  patio: { name: 'Pátio', theme: 'amarelo', ax: 15, az: 24, spawn: { hx: 6, z0: 21, z1: 23.2 },
+    build(B, K) {
+      B.shield(-19.8, 7.5);
+      B.box(0, 0, 8, 8, 2.4, K.plat);                        // praça elevada no centro
+      B.pairRamp(-1.5, -10, 1.5, -4, 0, 2.4, '+z', K.ramp);    // rampa de cada base até a praça
+      B.pair(2.2, 2.2, C, C, C, K.crate, 2.4);                 // cobertura em cima da praça
+      B.pair(-9, -6, C, 6, C, K.crate2);                       // muro baixo na lateral
+      B.pair(-11, -12, C, C, 3 * C, K.crate2);                 // pilar alto
+      B.pair(5, -13, 2 * C, C, C, K.crate);
+      B.pair(-4, -14, C, C, C, K.crate); B.pair(-4, -14, C, C, C, K.crate2, C);
+      B.pair(12.5, -3, C, 2 * C, 2 * C, K.crate2);
+      B.pair(-6.5, -2, C, C, C, K.crate);
+      B.pair(-9, -17.5, C, C, C, K.crate); B.pair(9.5, -17, C, 2 * C, C, K.crate);
+      B.pair(7, -8, C, C, C, K.crate);
+    } },
+  torres: { name: 'Torres', theme: 'verde', ax: 14, az: 26, spawn: { hx: 5.5, z0: 22.2, z1: 25 },
+    build(B, K) {
+      B.shield(-21, 7);
+      B.pairSolid([6, 0, -16], [12, 3, -12], K.plat);           // torre ao lado de cada base
+      B.pairRamp(7, -12, 9.4, -5, 0, 3, '-z', K.ramp);          // rampa do meio até a torre
+      B.pairSolid([9.6, 3, -12.3], [12, 4, -12], K.crate2);     // parapeito da torre
+      B.pair(6.8, -15, C, C, C, K.crate, 3);
+      B.pair(0, -3, 6, .8, 1.1, K.crate2);                      // muretas no meio
+      B.pair(-8, -6, C, C, 2 * C, K.crate2);
+      B.pair(-11, -13, C, 2 * C, C, K.crate);
+      B.pair(-3, -12, 2 * C, C, C, K.crate);
+      B.pair(3, -17.5, C, C, C, K.crate);
+      B.pair(-9, -18, C, C, C, K.crate); B.pair(-9, -18, C, C, C, K.crate2, C);
+      B.pair(4, -8, C, C, C, K.crate);
+      B.pair(-4, -1, C, C, C, K.crate);
+    } },
+  ponte: { name: 'Ponte', theme: 'roxo', ax: 15, az: 25, spawn: { hx: 6, z0: 21.6, z1: 24 },
+    build(B, K) {
+      B.shield(-20.5, 7.5);
+      const BY = 2.6;
+      B.solid([-1.5, BY - .3, -8], [1.5, BY, 8], K.plat);     // ponte elevada no meio, dá para passar por baixo
+      for (const z of [-5, 0, 5]) B.solid([-.4, 0, z - .4], [.4, BY - .3, z + .4], K.crate2);
+      B.solid([-1.65, BY, -6], [-1.5, BY + .9, 6], K.crate2); B.solid([1.5, BY, -6], [1.65, BY + .9, 6], K.crate2);
+      B.pairRamp(-1.5, -15, 1.5, -8, 0, BY, '+z', K.ramp);
+      B.pair(-9, -12, 2 * C, C, C, K.crate);
+      B.pair(-11, -4, C, C, 2 * C, K.crate2);
+      B.pair(-7, 3, C, C, C, K.crate);
+      B.pair(8, -13, C, C, C, K.crate); B.pair(8, -13, C, C, C, K.crate2, C);
+      B.pair(11, -7, C, 2 * C, C, K.crate);
+      B.pair(5, -6, C, C, C, K.crate);
+      B.pair(-5, -17, C, C, C, K.crate);
+      B.pair(5, -18, 2 * C, C, C, K.crate);
+      B.pair(-12, -17, C, C, C, K.crate);
+      B.pair(-5, -9, C, C, 2 * C, K.crate2);
+    } },
+  fortes: { name: 'Fortes', theme: 'laranja', ax: 15, az: 25, spawn: { hx: 6, z0: 21.4, z1: 23.8 },
+    build(B, K) {
+      B.pairSolid([-15, 0, -25], [15, 1.2, -13], K.plat);        // cada lado tem um forte elevado
+      B.pairSolid([-7.5, 1.2, -20.9], [7.5, 4.4, -20.1], K.shield);
+      B.pairRamp(-9, -13, -6.6, -7.5, 0, 1.2, '-z', K.ramp);   // duas rampas descendo do forte
+      B.pairRamp(6.6, -13, 9, -7.5, 0, 1.2, '-z', K.ramp);
+      B.pair(-11.5, -13.6, C, C, C, K.crate, 1.2);              // ameias na beira do forte
+      B.pair(-2.5, -13.6, 2 * C, C, C, K.crate, 1.2);
+      B.pair(3.5, -13.6, C, C, C, K.crate, 1.2);
+      B.box(0, 0, C, C, 3 * C, K.crate2);                       // pilar central
+      B.pair(-4, -3, 2 * C, C, C, K.crate);
+      B.pair(6, -5, C, C, 2 * C, K.crate2);
+      B.pair(-10, -6, C, 2 * C, C, K.crate);
+      B.pair(11, -1, C, C, C, K.crate);
+      B.pair(2, -9, C, C, C, K.crate);
+      B.pair(-5, -10, C, C, C, K.crate);
+    } },
+};
+const MAP_IDS = Object.keys(MAPS);
+const RAMP_FLIP = { '+z': '-z', '-z': '+z', '+x': '-x', '-x': '+x' };
+function rampHeightAt(r, x, z) {
+  if (x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1) return null;
+  let t;
+  if (r.dir === '+z') t = (z - r.z0) / (r.z1 - r.z0); else if (r.dir === '-z') t = (r.z1 - z) / (r.z1 - r.z0);
+  else if (r.dir === '+x') t = (x - r.x0) / (r.x1 - r.x0); else t = (r.x1 - x) / (r.x1 - r.x0);
+  return r.y0 + (r.y1 - r.y0) * clamp(t, 0, 1);
+}
+function rampH(x, z) { let h = -Infinity; for (const r of ramps) { const v = rampHeightAt(r, x, z); if (v !== null && v > h) h = v; } return h; }
+function rampBlock(x, z, y) { for (const r of ramps) { const h = rampHeightAt(r, x, z); if (h !== null && y < h - STEP_UP && y + H_STAND > r.y0) return true; } return false; }
+function groundAt(x, z) {
+  let g = Math.max(0, rampH(x, z));
+  for (const b of boxes) if (x > b.min[0] && x < b.max[0] && z > b.min[2] && z < b.max[2] && b.max[1] <= 4.5 && b.max[1] > g) g = b.max[1];
+  return g;
+}
+function addTri(out, a, b, c, n, col) { for (const v of [a, b, c]) { out.p.push(v[0], v[1], v[2]); out.n.push(n[0], n[1], n[2]); out.c.push(col.r, col.g, col.b); } }
+function buildMap(id) {
+  const def = MAPS[id] || MAPS.caixas, K = THEMES[def.theme];
+  MAP = Object.assign({ id: MAPS[id] ? id : 'caixas' }, def);
+  AX = def.ax; AZ = def.az; boxes = []; ramps = [];
+  const out = { p: [], n: [], c: [] };
+  const solid = (a, b, hex) => { addBoxTo(out, a, b, hex, false, true); boxes.push({ min: a, max: b }); };
+  const mirrorBox = (a, b) => [[-b[0], a[1], -b[2]], [-a[0], b[1], -a[2]]];
+  const ramp = (x0, z0, x1, z1, y0, y1, dir, hex) => {
+    const r = { x0, z0, x1, z1, y0, y1, dir }; ramps.push(r);
+    let L1, L2, H1, H2;
+    if (dir === '+z') { L1 = [x0, y0, z0]; L2 = [x1, y0, z0]; H2 = [x1, y1, z1]; H1 = [x0, y1, z1]; }
+    else if (dir === '-z') { L1 = [x1, y0, z1]; L2 = [x0, y0, z1]; H2 = [x0, y1, z0]; H1 = [x1, y1, z0]; }
+    else if (dir === '+x') { L1 = [x0, y0, z1]; L2 = [x0, y0, z0]; H2 = [x1, y1, z0]; H1 = [x1, y1, z1]; }
+    else { L1 = [x1, y0, z0]; L2 = [x1, y0, z1]; H2 = [x0, y1, z1]; H1 = [x0, y1, z0]; }
+    const u = new V3(L2[0] - L1[0], L2[1] - L1[1], L2[2] - L1[2]), v = new V3(H1[0] - L1[0], H1[1] - L1[1], H1[2] - L1[2]);
+    const n = new V3().crossVectors(v, u).normalize(); if (n.y < 0) n.negate();
+    r.n = [n.x, n.y, n.z]; r.p0 = L1;
+    const col = new THREE.Color(hex), N = r.n;
+    addTri(out, L1, L2, H2, N, col); addTri(out, L1, H2, H1, N, col);
+    const H1b = [H1[0], y0, H1[2]], H2b = [H2[0], y0, H2[2]];
+    const sN = dir[1] === 'z' ? [1, 0, 0] : [0, 0, 1];
+    addTri(out, L1, H1, H1b, sN, col); addTri(out, L2, H2, H2b, sN, col);
+    const bN = dir[1] === 'z' ? [0, 0, dir[0] === '+' ? 1 : -1] : [dir[0] === '+' ? 1 : -1, 0, 0];
+    addTri(out, H1b, H2b, H2, bN, col); addTri(out, H1b, H2, H1, bN, col);
+    // face de trás da rampa como caixa fina: bloqueia tiros e quem passa por trás
+    const e = .03;
+    if (dir === '+z') boxes.push({ min: [x0, y0, z1 - e], max: [x1, y1, z1] });
+    else if (dir === '-z') boxes.push({ min: [x0, y0, z0], max: [x1, y1, z0 + e] });
+    else if (dir === '+x') boxes.push({ min: [x1 - e, y0, z0], max: [x1, y1, z1] });
+    else boxes.push({ min: [x0, y0, z0], max: [x0 + e, y1, z1] });
+  };
+  const B = {
+    solid,
+    box: (x, z, w, d, h, col, y0 = 0) => solid([x - w / 2, y0, z - d / 2], [x + w / 2, y0 + h, z + d / 2], col),
+    pair: (x, z, w, d, h, col, y0 = 0) => { B.box(x, z, w, d, h, col, y0); B.box(-x, -z, w, d, h, col, y0); },
+    pairSolid: (a, b, col) => { solid(a, b, col); const m = mirrorBox(a, b); solid(m[0], m[1], col); },
+    pairRamp: (x0, z0, x1, z1, y0, y1, dir, col) => { ramp(x0, z0, x1, z1, y0, y1, dir, col); ramp(-x1, -z1, -x0, -z0, y0, y1, RAMP_FLIP[dir], col); },
+    shield: (zc, hw) => B.pairSolid([-hw, 0, zc - .4], [hw, 3.2, zc + .4], K.shield),
+  };
+  solid([-AX - 1, -1, -AZ - 1], [AX + 1, 0, AZ + 1], K.floor);
+  solid([-AX - 1, 0, -AZ - 1], [-AX, WALL_H, AZ + 1], K.wall);
+  solid([AX, 0, -AZ - 1], [AX + 1, WALL_H, AZ + 1], K.wall);
+  solid([-AX, 0, -AZ - 1], [AX, WALL_H, -AZ], K.wall);
+  solid([-AX, 0, AZ], [AX, WALL_H, AZ + 1], K.wall);
+  def.build(B, K);
+  if (worldMesh) { scene.remove(worldMesh); worldMesh.geometry.dispose(); }
+  worldMesh = new THREE.Mesh(geoFrom(out), worldMat); scene.add(worldMesh);
+  try { clearDecals(); BOT.wp = null; BOT.knowsUntil = 0; } catch (e) { /* primeira montagem, antes de existirem */ }
+}
+function pickMap(prev) {
+  if (S.map !== 'rotacao' && MAPS[S.map]) return S.map;
+  const ids = MAP_IDS.filter(i => i !== prev);
+  return ids[Math.floor(Math.random() * ids.length)];
+}
 // nascimento aleatório em qualquer ponto atrás da parede da base, olhando para uma das saídas
 function randSpawn(side) {
-  const x = (Math.random() * 2 - 1) * 6.5 * MS, z = -(22.4 + Math.random() * 2.8) * MS, yo = (Math.random() < .5 ? -1 : 1) * (0.3 + Math.random() * 0.7);
+  const sp = MAP.spawn, x = (Math.random() * 2 - 1) * sp.hx, z = -(sp.z0 + Math.random() * (sp.z1 - sp.z0)), yo = (Math.random() < .5 ? -1 : 1) * (0.3 + Math.random() * 0.7);
   return side ? [r2(-x), r2(-z), r2(yo)] : [r2(x), r2(z), r2(Math.PI + yo)];
 }
 function spawnPoint(side, spec) {
   const s = (Array.isArray(spec) && spec.length === 3 && spec.every(fin)) ? spec : randSpawn(side);
-  return { x: clamp(s[0], -AX + .5, AX - .5), z: clamp(s[1], -AZ + .5, AZ - .5), yaw: s[2] };
+  const x = clamp(s[0], -AX + .5, AX - .5), z = clamp(s[1], -AZ + .5, AZ - .5);
+  return { x, z, y: groundAt(x, z), yaw: s[2] };
 }
 const SUN = 'normalize(vec3(0.5,1.0,0.35))';
 const worldMat = new THREE.ShaderMaterial({
@@ -426,7 +570,7 @@ col=min(col,vec3(1.0));
 float d=length(vW-cameraPosition);col=mix(col,uFog,clamp((d-40.0)/80.0,0.0,0.3));
 gl_FragColor=vec4(col,1.0);}`,
 });
-scene.add(new THREE.Mesh(geoFrom(world), worldMat));
+buildMap(S.map === 'rotacao' ? 'caixas' : S.map);
 // céu em degradê, sempre centrado na câmera
 const skyGeo = new THREE.SphereGeometry(200, 24, 12);
 { const pos = skyGeo.attributes.position, cols = [], top = new THREE.Color(0x4fa3f2), hor = new THREE.Color(0xdcefff), c = new THREE.Color();
@@ -453,9 +597,19 @@ function rayBox(o, d, min, max, tmax) {
   }
   return { t: t0, ax, sg };
 }
+function rayRamp(o, d, r, tmax) {
+  const n = r.n, den = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+  if (Math.abs(den) < 1e-6) return null;
+  const t = ((r.p0[0] - o[0]) * n[0] + (r.p0[1] - o[1]) * n[1] + (r.p0[2] - o[2]) * n[2]) / den;
+  if (t <= 1e-3 || t >= tmax) return null;
+  const x = o[0] + d[0] * t, z = o[2] + d[2] * t;
+  if (x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1) return null;
+  return { t, n: den < 0 ? n : [-n[0], -n[1], -n[2]] };
+}
 function traceMap(o, d, tmax) {
   let best = null;
-  for (const b of boxes) { const h = rayBox(o, d, b.min, b.max, best ? best.t : tmax); if (h && h.ax >= 0 && (!best || h.t < best.t)) best = h; }
+  for (const b of boxes) { const h = rayBox(o, d, b.min, b.max, best ? best.t : tmax); if (h && h.ax >= 0 && (!best || h.t < best.t)) { const n = [0, 0, 0]; n[h.ax] = h.sg; best = { t: h.t, n }; } }
+  for (const r of ramps) { const h = rayRamp(o, d, r, best ? best.t : tmax); if (h) best = h; }
   return best;
 }
 function trace(o, d, tmax, targets) {
@@ -463,7 +617,7 @@ function trace(o, d, tmax, targets) {
   let lim = m ? m.t : tmax, hit = null;
   if (targets) for (const hb of targets) { const h = rayBox(o, d, hb.min, hb.max, lim); if (h && h.t < lim) { lim = h.t; hit = { t: h.t, part: hb.part }; } }
   if (hit) return { t: hit.t, part: hit.part, point: [o[0] + d[0] * hit.t, o[1] + d[1] * hit.t, o[2] + d[2] * hit.t] };
-  if (m) { const n = [0, 0, 0]; n[m.ax] = m.sg; return { t: m.t, point: [o[0] + d[0] * m.t, o[1] + d[1] * m.t, o[2] + d[2] * m.t], normal: n }; }
+  if (m) return { t: m.t, point: [o[0] + d[0] * m.t, o[1] + d[1] * m.t, o[2] + d[2] * m.t], normal: m.n };
   return null;
 }
 function clearLine(a, b) {
@@ -503,15 +657,26 @@ function physics(e, wx, wz, maxS, jump, dt) {
   }
   e.vel.y -= GRAV * dt;
   const p = e.pos, h = e.h;
+  // degrau: no chão, sobe sozinho em bordas baixas (fim de rampa, beirada de plataforma)
+  const canStep = (x, z, b) => e.onGround && b.max[1] - p.y > 0 && b.max[1] - p.y <= STEP_UP && !overlapAny(x, b.max[1] + 1e-3, z, h);
   let sx = Math.sign(e.vel.x), nx = p.x + e.vel.x * dt;
-  for (const b of boxes) if (overlap(nx, p.y, p.z, h, b)) { if (sx > 0) nx = b.min[0] - RADIUS - 1e-4; else if (sx < 0) nx = b.max[0] + RADIUS + 1e-4; e.vel.x = 0; }
+  for (const b of boxes) if (overlap(nx, p.y, p.z, h, b)) { if (canStep(nx, p.z, b)) { p.y = b.max[1]; continue; } if (sx > 0) nx = b.min[0] - RADIUS - 1e-4; else if (sx < 0) nx = b.max[0] + RADIUS + 1e-4; e.vel.x = 0; }
+  if (ramps.length && rampBlock(nx, p.z, p.y)) { nx = p.x; e.vel.x = 0; }
   p.x = nx;
   let sz = Math.sign(e.vel.z), nz = p.z + e.vel.z * dt;
-  for (const b of boxes) if (overlap(p.x, p.y, nz, h, b)) { if (sz > 0) nz = b.min[2] - RADIUS - 1e-4; else if (sz < 0) nz = b.max[2] + RADIUS + 1e-4; e.vel.z = 0; }
+  for (const b of boxes) if (overlap(p.x, p.y, nz, h, b)) { if (canStep(p.x, nz, b)) { p.y = b.max[1]; continue; } if (sz > 0) nz = b.min[2] - RADIUS - 1e-4; else if (sz < 0) nz = b.max[2] + RADIUS + 1e-4; e.vel.z = 0; }
+  if (ramps.length && rampBlock(p.x, nz, p.y)) { nz = p.z; e.vel.z = 0; }
   p.z = nz;
   const vy0 = e.vel.y, wasG = e.onGround;
   let ny = p.y + e.vel.y * dt; e.onGround = false;
   for (const b of boxes) if (overlap(p.x, ny, p.z, h, b)) { if (vy0 <= 0) { ny = b.max[1]; e.onGround = true; } else { ny = b.min[1] - h - 1e-4; } e.vel.y = 0; }
+  if (ramps.length) {
+    const hr = rampH(p.x, p.z);
+    if (hr > -Infinity) {
+      if (ny < hr && ny > hr - STEP_UP - .25 && vy0 <= .5) { ny = hr; e.onGround = true; e.vel.y = 0; }
+      else if (!e.onGround && wasG && vy0 <= 0 && ny >= hr && ny - hr < .35) { ny = hr; e.onGround = true; e.vel.y = 0; } // gruda ao descer a rampa
+    }
+  }
   p.y = ny;
   if (!wasG && e.onGround && vy0 < -4) { e.vel.x *= 0.7; e.vel.z *= 0.7; }
   if (!wasG && e.onGround && vy0 < -5.5 && e.onLand) e.onLand(vy0);
@@ -865,6 +1030,7 @@ function hostNewMatch(t) {
 }
 function hostNextRound(t) {
   const st = H.st; st.r++; st.ph = 'freeze'; st.end = t + 3000; st.win = null; st.why = '';
+  st.mp = pickMap(st.mp); if (st.mp !== MAP.id) buildMap(st.mp);
   const swap = Math.random() < .5 ? 1 : 0; // lado sorteado a cada rodada
   st.sd = { [G.me]: swap, [G.opp]: 1 - swap };
   st.sx = { [G.me]: randSpawn(swap), [G.opp]: randSpawn(1 - swap) };
@@ -876,7 +1042,7 @@ function hostEndRound(t, win, why) {
 }
 function hostBroadcast(t) {
   const st = H.st; if (!st) return; H.beat = t;
-  emit('round', { m: st.m, r: st.r, ph: st.ph, ms: Math.max(0, Math.round(st.end - t)), sc: st.sc, tg: st.tg, rt: st.rt, win: st.win, why: st.why, sd: st.sd, sx: st.sx });
+  emit('round', { m: st.m, r: st.r, ph: st.ph, ms: Math.max(0, Math.round(st.end - t)), sc: st.sc, tg: st.tg, rt: st.rt, win: st.win, why: st.why, sd: st.sd, sx: st.sx, mp: st.mp });
 }
 function hostOnDead(victim, d) {
   const st = H.st; if (!st || st.ph !== 'live' || d.r !== st.r || d.m !== st.m) return;
@@ -888,6 +1054,8 @@ function applyRound(d) {
   const v = G.view, prev = v.m + ':' + v.r + ':' + v.ph;
   if (d.m !== v.m) { G.stats = {}; G.deadSeen.clear(); }
   v.m = d.m; v.r = d.r; v.ph = d.ph; v.endsAt = now() + (fin(d.ms) ? d.ms : 0); v.sc = d.sc || {}; v.tg = d.tg || 10; v.rt = d.rt || 60; v.win = d.win || null; v.why = d.why || '';
+  if (typeof d.mp === 'string' && MAPS[d.mp] && d.mp !== MAP.id) buildMap(d.mp);
+  v.mp = MAP.id;
   const key = d.m + ':' + d.r;
   if ((d.ph === 'freeze' || d.ph === 'live') && G.spawnKey !== key) {
     G.spawnKey = key;
@@ -898,7 +1066,7 @@ function applyRound(d) {
 }
 function phaseBanner(d) {
   const me = d.sc ? (d.sc[G.me] || 0) : 0, op = d.sc ? (d.sc[G.opp] || 0) : 0;
-  if (d.ph === 'freeze') { banner('Rodada ' + d.r, 'Primeiro a ' + d.tg + ' vence', '', 2600); AU.round(); }
+  if (d.ph === 'freeze') { banner('Rodada ' + d.r, MAP.name + ' · primeiro a ' + d.tg + ' vence', '', 2600); AU.round(); }
   else if (d.ph === 'live') banner('Valendo', '', '', 900);
   else if (d.ph === 'end') {
     if (d.win === G.me) banner('Rodada sua', d.why === 'time' ? 'Tempo esgotado, você tinha mais vida' : me + ' a ' + op, 'win', 3000);
@@ -913,7 +1081,7 @@ function phaseBanner(d) {
 /* ================= Jogador ================= */
 function spawnSelf(side, spec) {
   const sp = spawnPoint(side ? 1 : 0, spec);
-  P.pos.set(sp.x, 0, sp.z); P.vel.set(0, 0, 0); P.yaw = sp.yaw; P.pitch = 0;
+  P.pos.set(sp.x, sp.y, sp.z); P.vel.set(0, 0, 0); P.yaw = sp.yaw; P.pitch = 0;
   P.hp = 100; P.alive = true; P.crouch = false; P.h = H_STAND; P.eyeOff = EYE_STAND; P.onGround = true;
   P.recoilP = P.recoilY = P.shots = P.spread = 0; P.zoom = 0; P.reloadEnd = 0; P.tagUntil = 0; P.killedBy = null;
   refillAmmo(P);
@@ -1039,11 +1207,11 @@ const BOT = { pos: new V3(0, 0, 20), vel: new V3(), yaw: 0, pitch: 0, h: H_STAND
   stuckCheck: 0, lastPos: new V3(), strafe: 1, strafeT: 0, burst: 0, pauseUntil: 0, shots: 0, tagUntil: 0, airCap: 0 };
 function botSpawn(side, spec) {
   const sp = spawnPoint(side ? 1 : 0, spec);
-  BOT.pos.set(sp.x, 0, sp.z); BOT.vel.set(0, 0, 0); BOT.yaw = sp.yaw; BOT.pitch = 0; BOT.hp = 100; BOT.alive = true;
+  BOT.pos.set(sp.x, sp.y, sp.z); BOT.vel.set(0, 0, 0); BOT.yaw = sp.yaw; BOT.pitch = 0; BOT.hp = 100; BOT.alive = true;
   BOT.see = false; BOT.knowsUntil = 0; BOT.wp = null; BOT.burst = 0; BOT.shots = 0; BOT.tagUntil = 0;
 }
 function randomPoint() {
-  for (let i = 0; i < 30; i++) { const x = (Math.random() * 2 - 1) * (AX - 1.5), z = (Math.random() * 2 - 1) * (AZ - 4); if (!overlapAny(x, 0.01, z, H_STAND)) return new V3(x, 0, z); }
+  for (let i = 0; i < 30; i++) { const x = (Math.random() * 2 - 1) * (AX - 1.5), z = (Math.random() * 2 - 1) * (AZ - 4); if (!overlapAny(x, 0.01, z, H_STAND) && rampH(x, z) === -Infinity) return new V3(x, 0, z); }
   return new V3(0, 0, 0);
 }
 function botDamage(dmg, part, wkey) {
@@ -1332,7 +1500,7 @@ function showMenu(on) {
   $('menu').hidden = !on;
   $('playSec').hidden = !!G.mode;
   $('pauseSec').hidden = !G.mode;
-  if (G.mode) $('pauseInfo').textContent = G.mode === 'online' ? 'Sala ' + NET.code + (G.opp ? ' · contra ' + nameOf(G.opp) : ' · esperando oponente') : 'Treino contra bot ' + (LEVELS[S.botLevel] || LEVELS.medio).label;
+  if (G.mode) $('pauseInfo').textContent = (G.mode === 'online' ? 'Sala ' + NET.code + (G.opp ? ' · contra ' + nameOf(G.opp) : ' · esperando oponente') : 'Treino contra bot ' + (LEVELS[S.botLevel] || LEVELS.medio).label) + ' · ' + MAP.name;
 }
 function resetSession() {
   H.st = null; G.view = { m: '', r: 0, ph: 'wait', endsAt: 0, sc: {}, tg: S.target, win: null, why: '', rt: S.roundTime };
@@ -1342,7 +1510,7 @@ function resetSession() {
   spawnSelf(0, null); P.weapon = 'rifle';
 }
 function startSession(mode) {
-  AU.init(); resetSession(); G.mode = mode;
+  AU.init(); buildMap(S.map === 'rotacao' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : S.map); resetSession(); G.mode = mode;
   el.hud.hidden = false;
   if (mode === 'bot') {
     G.me = 'A'; G.opp = 'B'; G.host = true; G.hostPeer = 'A'; G.names.B = 'Bot ' + (LEVELS[S.botLevel] || LEVELS.medio).label;
@@ -1377,6 +1545,7 @@ function applySettings() {
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2) * clamp(S.scale, 0.3, 1));
   resize(); AU.vol(S.volume);
   renderXH($('xhPrev'), S.ch, 0); el.xh._k = '';
+  if (!G.mode && S.map !== 'rotacao' && MAPS[S.map] && MAP.id !== S.map) buildMap(S.map);
 }
 document.querySelectorAll('[data-k]').forEach(e => {
   e.addEventListener('input', () => {

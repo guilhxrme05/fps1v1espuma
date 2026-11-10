@@ -12,9 +12,20 @@ A conexão é direta entre os dois navegadores (WebRTC via PeerJS). O servidor p
 
 Sem parceiro? Use **Treinar contra bot** (fácil, médio ou difícil).
 
-## Mapa
+## Mapas
 
-Arena simétrica (girada 180°), chão branco e caixas azul-claro. Cada base fica atrás de uma parede, então ninguém nasce vendo o outro: a saída é pelas laterais.
+Todos são simétricos (girados 180°), com chão branco e uma parede na frente de cada base, então ninguém nasce vendo o outro. Lado e ponto de nascimento são sorteados a cada rodada.
+
+| Mapa | Cor | O que tem |
+|---|---|---|
+| Caixas | azul | Arena aberta cheia de caixas |
+| Pátio | amarelo | Praça elevada no centro, com rampa saindo de cada base |
+| Torres | verde | Uma torre ao lado de cada base, com rampa vindo do meio |
+| Ponte | roxo | Ponte elevada no meio; dá para passar por baixo |
+| Fortes | laranja | Cada base fica num forte elevado, com duas rampas descendo |
+| Rotação | — | Sorteia um mapa diferente a cada rodada |
+
+Vale o mapa escolhido por quem criou a sala.
 
 ## Regras
 
