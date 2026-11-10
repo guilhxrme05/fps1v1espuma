@@ -1,6 +1,6 @@
 # aim_duelo
 
-Duelo 1v1 estilo CS que roda no navegador. Um arquivo só (`index.html`), mapa de caixas laranja sem textura inspirado no aim_map, rodadas como no CS e velocidade de movimento do Valorant.
+Duelo 1v1 estilo CS que roda no navegador. Um arquivo só (`index.html`), arena ensolarada de caixas azuis no espírito do aim_map, rodadas como no CS e velocidade de movimento do Valorant.
 
 ## Como jogar com seu parceiro
 
@@ -11,6 +11,10 @@ Duelo 1v1 estilo CS que roda no navegador. Um arquivo só (`index.html`), mapa d
 A conexão é direta entre os dois navegadores (WebRTC via PeerJS). O servidor público do PeerJS só faz o pareamento; o jogo em si não passa por servidor. Algumas redes corporativas bloqueiam conexão direta. Se não conectar em 15 segundos, testem fora da VPN ou em outra rede.
 
 Sem parceiro? Use **Treinar contra bot** (fácil, médio ou difícil).
+
+## Mapa
+
+Arena simétrica (girada 180°), chão branco e caixas azul-claro. Cada base fica atrás de uma parede, então ninguém nasce vendo o outro: a saída é pelas laterais.
 
 ## Regras
 
